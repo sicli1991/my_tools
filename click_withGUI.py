@@ -4,12 +4,17 @@ from tkinter import filedialog
 from PIL import Image, ImageTk
 import os
 from tkinter import ttk
+import yaml
 
 Global_color_list = ["red", "orange", "yellow", "green", "blue", "cyan", "purple",
                      "hot pink", "dark orange", "gold", "spring green", "navy",
                      "cadet blue", "magenta"]
 method = ['kp', 'bb']
 settingWindowCounter = 1
+
+# load config file
+with open('config.yaml') as yaml_file:
+    config = yaml.load(yaml_file, Loader=yaml.FullLoader)
 
 
 def threshold_value(current_x, current_y, thres_x, thres_y):
@@ -43,8 +48,8 @@ class GUI:
         self.canvasImgZoomX = None
         self.canvasImgZoomY = None
 
-        self.drawPointSize = 5
-        self.drawBBsize = 5
+        self.drawPointSize = config['draw_label_size']['default']
+        self.drawBBsize = config['draw_label_size']['default']
         self.drawMethod = 'bb'
         self.drawBBcoordList = []  # list of coordinates for drawing bounding box (coordinates based on event.xy)
 
@@ -64,28 +69,50 @@ class GUI:
         self.imageProcessFrame = tk.Frame(self.imageFrame, width=300, height=50,
                                           highlightbackground="red", highlightthickness=2)
         self.imageProcessFrame.pack_propagate(False)
-        self.nextImageBTN = tk.Button(self.imageProcessFrame, text=">>[->]", font=12)
-        self.previousImageBTN = tk.Button(self.imageProcessFrame, text="<<[<-]", font=12)
-        self.saveAndNextBTN = tk.Button(self.imageProcessFrame, text='SAVE[Enter]', font=12)
+        self.nextImageBTN = None
+        self.previousImageBTN = None
+        self.saveAndNextBTN = None
         self.coorDisplaybar = tk.Text(self.root, padx=20, pady=10, height=1, width=170, bg="light cyan")
 
         # working dir area
         self.workingDirFrame = tk.Frame(self.root, bg='black', highlightbackground="green", highlightthickness=2)
-        self.btn1 = tk.Button(self.workingDirFrame, text='Select directory', font=12)
+        self.btn1 = None  # select folder button
         self.folderName = tk.Label(self.workingDirFrame, text="", font=12, width=20, height=1,
                                    background='green', foreground="white")
-        self.trv = ttk.Treeview(self.root, selectmode='none', height=10)
-        self.cDsb = tk.Scrollbar(self.root, orient='horizontal')
+
+        # files display tree area
+        self.trvFrame = tk.Frame(self.root)
+        self.cDsb = tk.Scrollbar(self.trvFrame)  # orient='horizontal'
+        self.trv = ttk.Treeview(self.trvFrame, selectmode='none', height=12)
+
+        # label setting area
+        self.labelSettingFrame = tk.Frame(self.root, height=480, width=220,
+                                          highlightbackground="green", highlightthickness=2)
+        self.labelSettingFrame.pack_propagate(False)
+        self.selectedLabel = tk.StringVar()
+        self.labelComboBox = ttk.Combobox(self.labelSettingFrame, textvariable=self.selectedLabel)
+
+        self.sizeRadioFrame = tk.Frame(self.labelSettingFrame)
+        self.sizeRadioLabel = tk.Label(self.sizeRadioFrame, text="Size:", font=10)
+        self.sizeRadioBtn = tk.Radiobutton(self.sizeRadioFrame)
+        self.SRSiv = tk.IntVar()
+        self.SRSiv.set(config['draw_label_size']['default'])
+        self.sizeRadioString = [("1", 1), ("3", 3), ("5", 5), ("7", 7)]
 
         # output setting area
         self.outputFrame = tk.Frame(self.root, bg='black', highlightbackground="cyan", highlightthickness=2)
-        self.btnOutput = tk.Button(self.outputFrame, text="Output Setting", font=12)
+        self.btnOutput = None  # open output setting window button
         self.outputPathLabel = tk.Label(self.outputFrame, text="", font=12, width=20, height=1,
                                         background='firebrick4', foreground="white")
         self.SaveFileStructure = self.SFS()
 
-        self.button()
+        # menu area
+        self.menuBar = tk.Menu(self.root)
+        self.fileMenu = None
+
         self.interface()
+        self.button()
+        self.menu_bar()
 
     class SFS:
         def __init__(self):
@@ -99,20 +126,30 @@ class GUI:
             # self.opl.config(text=self.saveFilePath)
 
     def button(self):
-        # self.btn1.grid(row=0, column=3, padx=5, pady=10, sticky="NW")
+        self.btn1 = tk.Button(self.workingDirFrame, text='Select directory', font=12,
+                              command=self.list_file_in_folder)
         self.btn1.pack(side='bottom')
-        self.btn1.bind("<Button-1>", self.list_file_in_folder)
 
+        self.btnOutput = tk.Button(self.outputFrame, text="Output Setting", font=12,
+                                   command=self.open_setting_window)
         self.btnOutput.pack(side='top')
-        self.btnOutput.bind("<Button-1>", self.open_setting_window)
+        # self.btnOutput.bind("<Button-1>", self.open_setting_window)
 
+        self.nextImageBTN = tk.Button(self.imageProcessFrame, text=">>[->]", font=12,
+                                      command=self.show_next_img)
         self.nextImageBTN.pack(side='right')
-        self.nextImageBTN.bind('<Button-1>', self.show_next_img)
+
+        self.previousImageBTN = tk.Button(self.imageProcessFrame, text="<<[<-]", font=12,
+                                          command=self.show_previous_img)
         self.previousImageBTN.pack(side='left')
-        self.previousImageBTN.bind('<Button-1>', self.show_previous_img)
+
+        self.saveAndNextBTN = tk.Button(self.imageProcessFrame, text='SAVE[Enter]', font=12,
+                                        command=self.save_result_show_next)
         self.saveAndNextBTN.pack()
-        # self.saveAndNextBTN.bind('<Enter>', self.save_result)
-        self.saveAndNextBTN.bind('<Button-1>', self.save_result_show_next)
+
+        for si, val in self.sizeRadioString:
+            tk.Radiobutton(self.sizeRadioFrame, text=si, padx=5, variable=self.SRSiv,
+                           command=self.change_label_size, value=val).pack(side='left')
         # self.root.bind('<Return>', self.save_result)
 
     def interface(self):
@@ -130,23 +167,57 @@ class GUI:
         self.coorDisplaybar.config(state='disabled', wrap='none', xscrollcommand=self.cDsb.set)
         self.imageProcessFrame.pack(side='bottom')
 
-        # working dir list interface
-        self.workingDirFrame.grid(row=0, column=3, sticky='e', padx=(0, 10))
+        # working dir list (interface)
+        self.workingDirFrame.grid(row=0, column=3, sticky='ne', padx=(0, 10), pady=10)
         self.folderName.pack(side='top')
-        self.trv.grid(row=1, column=3, padx=10, pady=15, sticky="ne")
 
-        # output area interface
+        # tree view file list area (interface)
+        self.trvFrame.grid(row=1, column=3, sticky='ne')
+        self.cDsb.pack(side='right', fill=tk.Y)
+        self.trv.pack()
+        self.trv.config(yscrollcommand=self.cDsb.set)
+        self.cDsb.config(command=self.trv.yview)
+
+        # label setting area (interface)
+        self.labelSettingFrame.grid(row=2, column=3, sticky='ne', padx=(0, 10))
+        self.labelComboBox['values'] = ['Keypoint', 'Bounding Box']
+        self.labelComboBox['state'] = 'readonly'
+        self.labelComboBox.pack(fill=tk.X, padx=5, pady=5)
+        self.labelComboBox.bind('<<ComboboxSelected>>', self.label_method_changed)
+
+        self.sizeRadioFrame.pack(side='bottom')
+        self.sizeRadioLabel.pack(side='left', fill=tk.Y)
+
+
+        # output area (interface)
         self.outputFrame.grid(row=3, column=3, sticky='e', padx=(0, 10))
         self.outputPathLabel.pack(side='bottom')
 
-        # working list interface
+        # working list (interface)
         trv_s = ttk.Style()
         trv_s.theme_use('clam')
         trv_s.configure('Treeview.Heading', background="grey")
         self.trv.heading('#0', text="Working Directory", anchor='center')
         self.trv.bind("<Double-1>", self.trv_double_click)
 
-    def list_file_in_folder(self, other_para):
+    def menu_bar(self):
+        self.fileMenu = tk.Menu(self.menuBar, tearoff=0)
+        self.fileMenu.add_command(label="Open Directory", command=self.list_file_in_folder)
+        self.fileMenu.add_command(label="Save Setting", command=self.open_setting_window)
+        # self.fileMenu.add_command(label="Open", command=donothing)
+        # self.fileMenu.add_command(label="Save", command=donothing)
+        # self.fileMenu.add_command(label="Save as...", command=donothing)
+        self.fileMenu.add_separator()
+        self.fileMenu.add_command(label="Close", command=self.root.destroy)
+        self.menuBar.add_cascade(label='File', menu=self.fileMenu, font=('', 50))
+
+        self.menuBar.add_cascade(label='Help')
+        self.root.config(menu=self.menuBar)
+
+    def donothing(self):
+        pass
+
+    def list_file_in_folder(self):
         # messagebox.showinfo("window1", "bing!")
         folder_selected = filedialog.askdirectory()
         self.currentWorkingPath = folder_selected
@@ -157,9 +228,10 @@ class GUI:
 
         i = 1
         for root, subdir, files in os.walk(folder_selected):
-            for file in files:
-                self.trv.insert("", 'end', iid=str(i), text=file, tags='selectable')
-                i += 1
+            if root == self.currentWorkingPath:
+                for file in files:
+                    self.trv.insert("", 'end', iid=str(i), text=file, tags='selectable')
+                    i += 1
         self.trvSize = i-1
         print(self.trvSize)
 
@@ -174,7 +246,6 @@ class GUI:
                 self.saveFileNumberCounter = 0
                 self.trvSelectFile = tree.item(item_name, "text")
                 self.trvSelectIid = int(tree.focus())
-                # print(self.trvSelectIid, "!@##$")
                 select_file_path = os.path.join(self.currentWorkingPath, self.trvSelectFile)
                 self.display_image(select_file_path)
 
@@ -288,7 +359,7 @@ class GUI:
             element = '[' + str(cx) + ',' + str(cy) + ']'
         return element
 
-    def open_setting_window(self, kg):
+    def open_setting_window(self):
         global settingWindowCounter
         if settingWindowCounter == 1:
             self.rootSettingWindow = OutputSettingWindow(
@@ -311,7 +382,7 @@ class GUI:
         self.saveFileNumberCounter += 1
         return result
 
-    def save_result_show_next(self, other):
+    def save_result_show_next(self):
         if self.trvSelectFile == '':
             messagebox.showwarning(title='WARNING', message='None select files !')
             return
@@ -337,42 +408,41 @@ class GUI:
         self.show_next_img()
 
     def show_next_img(self):
-        if self.trvSelectIid == self.trvSize:
+        if not self.trvSelectIid:
+            return
+        elif self.trvSelectIid == self.trvSize:
             messagebox.showinfo('Last file', 'End of the File list !')
             return
         self.trvSelectIid += 1
         self.trv.selection_set(self.trvSelectIid)
-        # cur_item = self.trv.focus(self.trvSelectIid)
         self.trvSelectFile = self.trv.item(self.trvSelectIid, "text")
         select_file_path = os.path.join(self.currentWorkingPath, self.trvSelectFile)
         self.display_image(select_file_path)
 
-        # self.saveFileNumberCounter = 0
-        # cur_item = self.trv.focus()
-        # self.trvSelectFile = self.trv.item(cur_item, "text")
-        # select_file_path = os.path.join(self.currentWorkingPath, self.trvSelectFile)
-        # self.display_image(select_file_path)
-
     def show_previous_img(self):
-        if self.trvSelectIid == 1:
+        if not self.trvSelectIid:
+            return
+        elif self.trvSelectIid == 1:
             messagebox.showinfo('First file', 'No previous file in the list !')
             return
         self.trvSelectIid -= 1
         self.trv.selection_set(self.trvSelectIid)
-        # cur_item = self.trv.focus(self.trvSelectIid)
         self.trvSelectFile = self.trv.item(self.trvSelectIid, "text")
         select_file_path = os.path.join(self.currentWorkingPath, self.trvSelectFile)
         self.display_image(select_file_path)
-        # rows = self.trv.selection()
-        # for row in rows:
-        #     self.trv.next()
-        #     self.trv.move(row, self.trv.parent(row), self.trv.index(row)-1)
 
-        # self.saveFileNumberCounter = 0
-        # cur_item = self.trv.focus()
-        # self.trvSelectFile = self.trv.item(cur_item, "text")
-        # select_file_path = os.path.join(self.currentWorkingPath, self.trvSelectFile)
-        # self.display_image(select_file_path)
+    def label_method_changed(self, others):
+        lcg = self.labelComboBox.get()
+        messagebox.showinfo(
+            title='Result',
+            message=f'You selected {lcg}!'
+        )
+
+    def change_label_size(self):
+        tmp = self.SRSiv.get()
+        self.drawPointSize = tmp
+        self.drawBBsize = tmp
+        # print(self.SRSiv.get())
 
     def onKeyPress(self, event):
         ch = event.keysym
@@ -407,10 +477,8 @@ class OutputSettingWindow:
         self.rootOutputPathLabel = root_output_path_label  # test part
         self.local_output_path = None
 
-        self.btnApply = tk.Button(self.setting_window, text='Apply', fg='red',
-                                  command=self.apply_output_setting)
-        self.btnChangePath = tk.Button(self.setting_window, text='Choose Directory',
-                                       command=self.get_folder_dir)
+        self.btnApply = None  # apply button
+        self.btnChangePath = None  # change path button
 
         self.setting_window.protocol('WM_DELETE_WINDOW', self.close_output_setting_without_saving)
         self.root_OPS = root_output_structure
@@ -422,7 +490,12 @@ class OutputSettingWindow:
         self.interface()
 
     def button(self):
+        self.btnApply = tk.Button(self.setting_window, text='Apply', fg='red',
+                                  command=self.apply_output_setting)
         self.btnApply.grid(row=2, column=0, columnspan=2, pady=20)
+
+        self.btnChangePath = tk.Button(self.setting_window, text='Choose Directory',
+                                       command=self.get_folder_dir)
         self.btnChangePath.grid(row=0, column=1)
 
     def interface(self):
@@ -439,7 +512,7 @@ class OutputSettingWindow:
     def open_sw(self):
         x = self.parent.winfo_x()
         y = self.parent.winfo_y()
-        x_offset, y_offset = self.parent.winfo_width()*0.6, self.parent.winfo_height()*0.6
+        x_offset, y_offset = self.parent.winfo_width()*0.3, self.parent.winfo_height()*0.3
         self.setting_window.geometry("500x300+%d+%d" % (x+x_offset, y+y_offset))
         return self.setting_window
 
