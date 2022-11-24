@@ -39,7 +39,7 @@ class GUI:
         self.root.grid_propagate(False)
         self.root.pack_propagate(False)
         self.rootSettingWindow = None
-        self.root.bind('<KeyPress>', self.onKeyPress)
+        self.root.bind('<KeyPress>', self.on_key_press)
 
         self.displayImage = None
         self.originalImageSize = None
@@ -88,7 +88,7 @@ class GUI:
         # label setting area
         self.labelSettingFrame = tk.Frame(self.root, height=480, width=220,
                                           highlightbackground="green", highlightthickness=2)
-        self.labelSettingFrame.pack_propagate(False)
+        self.labelSettingFrame.grid_propagate(False)
         self.selectedLabel = tk.StringVar()
         self.labelComboBox = ttk.Combobox(self.labelSettingFrame, textvariable=self.selectedLabel)
 
@@ -162,6 +162,10 @@ class GUI:
         self.root.rowconfigure(2, weight=4)
         self.root.rowconfigure(3, weight=1)
 
+        self.labelSettingFrame.rowconfigure(0, weight=2)
+        self.labelSettingFrame.rowconfigure(1, weight=2)
+        self.labelSettingFrame.rowconfigure(2, weight=2)
+
         self.imageFrame.grid(row=0, column=0, columnspan=2, rowspan=3)
         self.coorDisplaybar.grid(row=3, column=0, columnspan=2, sticky='nw', padx=5)
         self.coorDisplaybar.config(state='disabled', wrap='none', xscrollcommand=self.cDsb.set)
@@ -182,12 +186,13 @@ class GUI:
         self.labelSettingFrame.grid(row=2, column=3, sticky='ne', padx=(0, 10))
         self.labelComboBox['values'] = ['Keypoint', 'Bounding Box']
         self.labelComboBox['state'] = 'readonly'
-        self.labelComboBox.pack(fill=tk.X, padx=5, pady=5)
+        # self.labelComboBox.pack(fill=tk.X, padx=5, pady=5)
+        self.labelComboBox.grid(row=1, sticky='we', padx=(15, 5))
         self.labelComboBox.bind('<<ComboboxSelected>>', self.label_method_changed)
 
-        self.sizeRadioFrame.pack(side='bottom')
+        # self.sizeRadioFrame.pack(side='bottom')
+        self.sizeRadioFrame.grid(row=3)
         self.sizeRadioLabel.pack(side='left', fill=tk.Y)
-
 
         # output area (interface)
         self.outputFrame.grid(row=3, column=3, sticky='e', padx=(0, 10))
@@ -221,8 +226,8 @@ class GUI:
         # messagebox.showinfo("window1", "bing!")
         folder_selected = filedialog.askdirectory()
         self.currentWorkingPath = folder_selected
-        self.folderName.config(text=folder_selected)
-
+        self.folderName.config(text=folder_selected, anchor='w')
+        create_widget_tip(self.folderName)
         for item in self.trv.get_children():
             self.trv.delete(item)
 
@@ -294,24 +299,24 @@ class GUI:
         self.imageCanvas.create_rectangle(x1, y1, x2, y2, outline=color, width=self.drawBBsize)
 
     def get_press_coordinate(self, event):
-        Cx = event.x
-        Cy = event.y
+        ex = event.x
+        ey = event.y
 
         if self.drawMethod == 'kp':
-            self.draw_point(Cx, Cy, len(self.coordList))
+            self.draw_point(ex, ey, len(self.coordList))
 
         if self.resizeImgFlag:
-            cand_x, cand_y = threshold_value(Cx - self.canvasImgZoomX, Cy - self.canvasImgZoomY,
+            cand_x, cand_y = threshold_value(ex - self.canvasImgZoomX, ey - self.canvasImgZoomY,
                                              self.resizedImageSize[0], self.resizedImageSize[1])
             final_x, final_y = self.de_resize_coordinates(cand_x, cand_y)
         else:
-            final_x, final_y = threshold_value(Cx - self.canvasImgZoomX, Cy - self.canvasImgZoomY,
+            final_x, final_y = threshold_value(ex - self.canvasImgZoomX, ey - self.canvasImgZoomY,
                                                self.originalImageSize[0], self.originalImageSize[1])
 
         if self.drawBBcoordList:
             print("drawBoundingBox heads out of list, Error!!!!")
         else:
-            self.drawBBcoordList.append([Cx, Cy])
+            self.drawBBcoordList.append([ex, ey])
         if self.drawMethod == 'kp':
             self.coordList.append((final_x, final_x))
             element = self.format_coordlistbar_output()
@@ -323,18 +328,18 @@ class GUI:
             self.BBcoordList.append([[final_x, final_y]])
 
     def get_release_coordinate(self, event):
-        bb_X, bb_Y = event.x, event.y
+        bb_x, bb_y = event.x, event.y
 
         if self.resizeImgFlag:  # check image resize status
-            cand_bbx, cand_bby = threshold_value(bb_X - self.canvasImgZoomX, bb_Y - self.canvasImgZoomY,
+            cand_bbx, cand_bby = threshold_value(bb_x - self.canvasImgZoomX, bb_y - self.canvasImgZoomY,
                                                  self.resizedImageSize[0], self.resizedImageSize[1])
             final_x, final_y = self.de_resize_coordinates(cand_bbx, cand_bby)
         else:
-            final_x, final_y = threshold_value(bb_X - self.canvasImgZoomX, bb_Y - self.canvasImgZoomY,
+            final_x, final_y = threshold_value(bb_x - self.canvasImgZoomX, bb_y - self.canvasImgZoomY,
                                                self.originalImageSize[0], self.originalImageSize[1])
 
         if len(self.drawBBcoordList) == 1:
-            self.drawBBcoordList.append([bb_X, bb_Y])
+            self.drawBBcoordList.append([bb_x, bb_y])
         else:
             print("BoundingBox tails out of list, Error!!!!")
         if self.drawMethod == 'bb':
@@ -371,7 +376,7 @@ class GUI:
             self.rootSettingWindow.lift()
 
     def update_output_path_label(self):
-        self.outputPathLabel.config(text=self.SaveFileStructure.saveFilePath)
+        self.outputPathLabel.config(text=self.SaveFileStructure.saveFilePath, anchor='w')
 
     def generate_savefile_name(self, readin_name, save_format='#'):
         result_name, _ = segment_file_name(readin_name)
@@ -444,7 +449,7 @@ class GUI:
         self.drawBBsize = tmp
         # print(self.SRSiv.get())
 
-    def onKeyPress(self, event):
+    def on_key_press(self, event):
         ch = event.keysym
         print(ch)
         print("key pressed")
@@ -458,6 +463,7 @@ class GUI:
 
             # Let it pop back up after 200 milliseconds
             # b.after(200, lambda: b.config(relief=tk.RAISED))
+
     def clear_display(self):
         self.imageCanvas.delete('all')
 
@@ -537,6 +543,52 @@ class OutputSettingWindow:
         self.setting_window.attributes('-topmost', 1)
         self.local_output_path = folder_selected
         self.saveFolderDisplay.config(text=folder_selected)
+
+
+class WidgetTip:
+
+    def __init__(self, widget):
+        self.widget = widget
+        self.tipWindow = None
+        self.id = None
+        self.tipX, self.tipY = 0, 0
+        self.text = None
+
+    def show_tip(self, text):
+        self.text = text
+        if self.tipWindow or not self.text:
+            return
+        x, y, cx, cy = self.widget.bbox('insert')
+        x = x + self.widget.winfo_rootx() + 57
+        y = y + cy + self.widget.winfo_rooty() + 27
+        self.tipWindow = tk.Toplevel(self.widget)
+        self.tipWindow.wm_overrideredirect(True)
+        self.tipWindow.wm_geometry("+%d+%d" % (x, y))
+        label = tk.Label(self.tipWindow, text=self.text, justify='left',
+                         background="#ffffe0", relief='solid', borderwidth=1,
+                         font=("tahoma", "8", "normal"))
+        label.pack(ipadx=1)
+
+    def hidetip(self):
+        tw = self.tipWindow
+        self.tipWindow = None
+        if tw:
+            tw.destroy()
+
+
+def create_widget_tip(widget):
+    wt = WidgetTip(widget)
+    txt = widget.cget('text')
+
+    def enter(event):
+        # print(txt)
+        wt.show_tip(txt)
+
+    def leave(event):
+        wt.hidetip()
+
+    widget.bind('<Enter>', enter)
+    widget.bind('<Leave>', leave)
 
 
 if __name__ == "__main__":
