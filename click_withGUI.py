@@ -35,7 +35,7 @@ class GUI:
         self.root = tk.Tk()
         self.root.title("图像处理")
         self.rootGeometry = (1680, 960)
-        self.root.geometry('%dx%d' % (self.rootGeometry[0], self.rootGeometry[1]))
+        self.root.geometry('%dx%d+0+0' % (self.rootGeometry[0], self.rootGeometry[1]))
         self.root.grid_propagate(False)
         self.root.pack_propagate(False)
         self.rootSettingWindow = None
@@ -52,9 +52,10 @@ class GUI:
         self.drawBBsize = config['draw_label_size']['default']
         self.drawMethod = 'bb'
         self.drawBBcoordList = []  # list of coordinates for drawing bounding box (coordinates based on event.xy)
+        self.drawTraceList = []  # used to trace canvas draw items for delete or ...
 
         self.currentWorkingPath = None
-        self.coordList = []
+        self.KPcoordList = []
         self.BBcoordList = []  # list of coordinates to display and save for BB (coordinates based on resized x y)
         self.trvSelectFile = ''
         self.trvSelectIid = None
@@ -135,15 +136,15 @@ class GUI:
         self.btnOutput.pack(side='top')
         # self.btnOutput.bind("<Button-1>", self.open_setting_window)
 
-        self.nextImageBTN = tk.Button(self.imageProcessFrame, text=">>[->]", font=12,
+        self.nextImageBTN = tk.Button(self.imageProcessFrame, text=">>", font=12,
                                       command=self.show_next_img)
         self.nextImageBTN.pack(side='right')
 
-        self.previousImageBTN = tk.Button(self.imageProcessFrame, text="<<[<-]", font=12,
+        self.previousImageBTN = tk.Button(self.imageProcessFrame, text="<<", font=12,
                                           command=self.show_previous_img)
         self.previousImageBTN.pack(side='left')
 
-        self.saveAndNextBTN = tk.Button(self.imageProcessFrame, text='SAVE[Enter]', font=12,
+        self.saveAndNextBTN = tk.Button(self.imageProcessFrame, text='SAVE', font=12,
                                         command=self.save_result_show_next)
         self.saveAndNextBTN.pack()
 
@@ -289,21 +290,23 @@ class GUI:
         color = Global_color_list[color_id-1]
         x1, y1 = (dp_x - self.drawPointSize), (dp_y - self.drawPointSize)
         x2, y2 = (dp_x + self.drawPointSize), (dp_y + self.drawPointSize)
-        self.imageCanvas.create_oval(x1, y1, x2, y2, fill=color)
+        my_draw = self.imageCanvas.create_oval(x1, y1, x2, y2, fill=color)
+        self.drawTraceList.append(my_draw)
 
     def draw_bb(self, bb_list, color_id):
         global Global_color_list
         color = Global_color_list[color_id-1]
         x1, y1 = bb_list[0][0], bb_list[0][1]
         x2, y2 = bb_list[1][0], bb_list[1][1]
-        self.imageCanvas.create_rectangle(x1, y1, x2, y2, outline=color, width=self.drawBBsize)
+        my_draw = self.imageCanvas.create_rectangle(x1, y1, x2, y2, outline=color, width=self.drawBBsize)
+        self.drawTraceList.append(my_draw)
 
     def get_press_coordinate(self, event):
         ex = event.x
         ey = event.y
 
         if self.drawMethod == 'kp':
-            self.draw_point(ex, ey, len(self.coordList))
+            self.draw_point(ex, ey, len(self.KPcoordList))
 
         if self.resizeImgFlag:
             cand_x, cand_y = threshold_value(ex - self.canvasImgZoomX, ey - self.canvasImgZoomY,
@@ -318,9 +321,8 @@ class GUI:
         else:
             self.drawBBcoordList.append([ex, ey])
         if self.drawMethod == 'kp':
-            self.coordList.append((final_x, final_x))
+            self.KPcoordList.append((final_x, final_x))
             element = self.format_coordlistbar_output()
-            # element = '[' + str(final_x) + ',' + str(final_y) + ']'
             self.coorDisplaybar.config(state='normal')
             self.coorDisplaybar.insert(tk.END, element)
             self.coorDisplaybar.config(state='disabled')
@@ -359,7 +361,7 @@ class GUI:
             element = '[' + '(' + str(head_x) + ',' + str(head_y) + '),' + \
                       '(' + str(tail_x) + ',' + str(tail_y) + ')' + '] '
         elif self.drawMethod == 'kp':
-            tmp = self.coordList[-1]
+            tmp = self.KPcoordList[-1]
             cx, cy = tmp[0], tmp[1]
             element = '[' + str(cx) + ',' + str(cy) + ']'
         return element
@@ -374,9 +376,6 @@ class GUI:
             settingWindowCounter = 0
         elif settingWindowCounter == 0:
             self.rootSettingWindow.lift()
-
-    def update_output_path_label(self):
-        self.outputPathLabel.config(text=self.SaveFileStructure.saveFilePath, anchor='w')
 
     def generate_savefile_name(self, readin_name, save_format='#'):
         result_name, _ = segment_file_name(readin_name)
@@ -393,7 +392,7 @@ class GUI:
             return
         result = []
         if self.drawMethod == 'kp':
-            result = self.coordList
+            result = self.KPcoordList
         elif self.drawMethod == 'bb':
             result = self.BBcoordList
 
@@ -412,12 +411,32 @@ class GUI:
 
         self.show_next_img()
 
+    def insert_empty_label(self):
+        if self.drawMethod == 'kp':
+            # print(config['default_empty_label'])
+            if self.displayImage:
+                self.KPcoordList.append(config['default_empty_label'])
+            else:
+                print("None")
+        elif self.drawMethod == 'bb':
+            if self.displayImage:
+                self.BBcoordList.append([config['default_empty_label'], config['default_empty_label']])
+                element = self.format_coordlistbar_output()
+                self.coorDisplaybar.config(state='normal')
+                self.coorDisplaybar.insert(tk.END, element)
+                self.coorDisplaybar.config(state='disabled')
+                self.drawTraceList.append('EL')
+
+            else:
+                print("None")
+
     def show_next_img(self):
         if not self.trvSelectIid:
             return
         elif self.trvSelectIid == self.trvSize:
             messagebox.showinfo('Last file', 'End of the File list !')
             return
+        self.saveFileNumberCounter = 0
         self.trvSelectIid += 1
         self.trv.selection_set(self.trvSelectIid)
         self.trvSelectFile = self.trv.item(self.trvSelectIid, "text")
@@ -447,22 +466,29 @@ class GUI:
         tmp = self.SRSiv.get()
         self.drawPointSize = tmp
         self.drawBBsize = tmp
-        # print(self.SRSiv.get())
 
     def on_key_press(self, event):
-        ch = event.keysym
-        print(ch)
-        print("key pressed")
-        # if '1' <= ch <= maxkey:
-            # Retrieve this button from the dict
-            # b = buttons[ch]
+        e_key = event.keysym
+        ekl = config['event_key_list']
+        for key, val in ekl.items():
+            if e_key == val:
+                print(e_key)
+                self.do_command_from_keyboard(key)
 
-            # Simulate pushing the button
-            # b.config(relief=tk.SUNKEN)
-            # button_cb(ch)
+    def do_command_from_keyboard(self, key):
+        if key == 'SNN':
+            self.saveAndNextBTN.config(relief=tk.SUNKEN)  # simulate button press
+            self.saveAndNextBTN.after(200, lambda: self.saveAndNextBTN.config(relief=tk.RAISED))
+            self.save_result_show_next()
 
-            # Let it pop back up after 200 milliseconds
-            # b.after(200, lambda: b.config(relief=tk.RAISED))
+        elif key == 'NI':
+            pass
+        elif key == 'PI':
+            pass
+        elif key == 'IEL':
+            self.insert_empty_label()
+        elif key == 'DL':
+            pass
 
     def clear_display(self):
         self.imageCanvas.delete('all')
@@ -471,8 +497,9 @@ class GUI:
         self.coorDisplaybar.delete('1.0', tk.END)
         self.coorDisplaybar.configure(state='disabled')
 
-        self.coordList = []
+        self.KPcoordList = []
         self.BBcoordList = []
+        self.drawTraceList = []
 
 
 class OutputSettingWindow:
@@ -526,7 +553,8 @@ class OutputSettingWindow:
         global settingWindowCounter
         settingWindowCounter = 1
         self.root_OPS.get_value(self.local_output_path)
-        self.rootOutputPathLabel.config(text=self.root_OPS.saveFilePath)
+        self.rootOutputPathLabel.config(text=self.root_OPS.saveFilePath, anchor='w')
+        create_widget_tip(self.rootOutputPathLabel)
         self.setting_window.destroy()
 
     def close_output_setting_without_saving(self):
@@ -542,7 +570,7 @@ class OutputSettingWindow:
         folder_selected = filedialog.askdirectory()
         self.setting_window.attributes('-topmost', 1)
         self.local_output_path = folder_selected
-        self.saveFolderDisplay.config(text=folder_selected)
+        self.saveFolderDisplay.config(text=folder_selected, anchor='w')
 
 
 class WidgetTip:
@@ -559,14 +587,14 @@ class WidgetTip:
         if self.tipWindow or not self.text:
             return
         x, y, cx, cy = self.widget.bbox('insert')
-        x = x + self.widget.winfo_rootx() + 57
+        x = x + self.widget.winfo_rootx() - 57
         y = y + cy + self.widget.winfo_rooty() + 27
         self.tipWindow = tk.Toplevel(self.widget)
         self.tipWindow.wm_overrideredirect(True)
         self.tipWindow.wm_geometry("+%d+%d" % (x, y))
         label = tk.Label(self.tipWindow, text=self.text, justify='left',
                          background="#ffffe0", relief='solid', borderwidth=1,
-                         font=("tahoma", "8", "normal"))
+                         font=("tahoma", "12", "normal"))
         label.pack(ipadx=1)
 
     def hidetip(self):
