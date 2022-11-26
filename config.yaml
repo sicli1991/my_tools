@@ -1,7 +1,6 @@
 ---
 dataset_path: 'C:\Users\Sichao\Desktop\Jun25\v5\dataset_pickle'
-model_save_path: '.\modelGen\'
-pred_pickle_path:  '.\pickle_data\'
+output_save_path: '.\result\'
 
 draw_label_size:
     default:
@@ -18,9 +17,3 @@ event_key_list:
 default_empty_label:
     - 9999  # x
     - 9999  # y
-
-train_parameters:
-    loss:
-        - binary_crossentropy
-        - mean_squared_error
-        - mean_squared_error

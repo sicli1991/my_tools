@@ -187,7 +187,6 @@ class GUI:
         self.labelSettingFrame.grid(row=2, column=3, sticky='ne', padx=(0, 10))
         self.labelComboBox['values'] = ['Keypoint', 'Bounding Box']
         self.labelComboBox['state'] = 'readonly'
-        # self.labelComboBox.pack(fill=tk.X, padx=5, pady=5)
         self.labelComboBox.grid(row=1, sticky='we', padx=(15, 5))
         self.labelComboBox.bind('<<ComboboxSelected>>', self.label_method_changed)
 
@@ -353,18 +352,36 @@ class GUI:
             self.coorDisplaybar.insert(tk.END, element)
             self.coorDisplaybar.config(state='disabled')
 
-    def format_coordlistbar_output(self):
+    def format_coordlistbar_output(self, overwrite=False):
         element = None
-        if self.drawMethod == 'bb':
-            tmp = self.BBcoordList[-1]
-            head_x, head_y, tail_x, tail_y = tmp[0][0], tmp[0][1], tmp[1][0], tmp[1][1]
-            element = '[' + '(' + str(head_x) + ',' + str(head_y) + '),' + \
-                      '(' + str(tail_x) + ',' + str(tail_y) + ')' + '] '
-        elif self.drawMethod == 'kp':
-            tmp = self.KPcoordList[-1]
-            cx, cy = tmp[0], tmp[1]
-            element = '[' + str(cx) + ',' + str(cy) + ']'
-        return element
+        if overwrite:
+            result = ''
+            if self.drawMethod == 'bb':
+                bbl = self.BBcoordList
+                for tmp in bbl:
+                    head_x, head_y, tail_x, tail_y = tmp[0][0], tmp[0][1], tmp[1][0], tmp[1][1]
+                    element = '[' + '(' + str(head_x) + ',' + str(head_y) + '),' + \
+                              '(' + str(tail_x) + ',' + str(tail_y) + ')' + '] '
+                    result += element
+            elif self.drawMethod == 'kp':
+                kpl = self.KPcoordList
+                for tmp in kpl:
+                    cx, cy = tmp[0], tmp[1]
+                    element = '[' + str(cx) + ',' + str(cy) + ']'
+                    result += element
+            return result
+
+        else:
+            if self.drawMethod == 'bb':
+                tmp = self.BBcoordList[-1]
+                head_x, head_y, tail_x, tail_y = tmp[0][0], tmp[0][1], tmp[1][0], tmp[1][1]
+                element = '[' + '(' + str(head_x) + ',' + str(head_y) + '),' + \
+                          '(' + str(tail_x) + ',' + str(tail_y) + ')' + '] '
+            elif self.drawMethod == 'kp':
+                tmp = self.KPcoordList[-1]
+                cx, cy = tmp[0], tmp[1]
+                element = '[' + str(cx) + ',' + str(cy) + ']'
+            return element
 
     def open_setting_window(self):
         global settingWindowCounter
@@ -403,7 +420,7 @@ class GUI:
         if self.SaveFileStructure.saveFilePath == '':
             messagebox.showerror(title='Error', message='Saving Path is Empty  !')
             return
-        # print(self.trvSelectIid)
+
         save_name = self.generate_savefile_name(self.trvSelectFile)
         complete_name = os.path.join(self.SaveFileStructure.saveFilePath, save_name)
         with open(complete_name, 'w') as f:
@@ -412,23 +429,41 @@ class GUI:
         self.show_next_img()
 
     def insert_empty_label(self):
-        if self.drawMethod == 'kp':
-            # print(config['default_empty_label'])
-            if self.displayImage:
-                self.KPcoordList.append(config['default_empty_label'])
-            else:
-                print("None")
-        elif self.drawMethod == 'bb':
-            if self.displayImage:
-                self.BBcoordList.append([config['default_empty_label'], config['default_empty_label']])
-                element = self.format_coordlistbar_output()
-                self.coorDisplaybar.config(state='normal')
-                self.coorDisplaybar.insert(tk.END, element)
-                self.coorDisplaybar.config(state='disabled')
-                self.drawTraceList.append('EL')
+        if not self.displayImage:
+            messagebox.showwarning("None image selected!")
+            return
 
-            else:
-                print("None")
+        if self.drawMethod == 'kp':
+            self.KPcoordList.append(config['default_empty_label'])
+        elif self.drawMethod == 'bb':
+            self.BBcoordList.append([config['default_empty_label'], config['default_empty_label']])
+
+        element = self.format_coordlistbar_output()
+        self.coorDisplaybar.config(state='normal')
+        self.coorDisplaybar.insert(tk.END, element)
+        self.coorDisplaybar.config(state='disabled')
+        self.drawTraceList.append('IEL')
+
+    def delete_previous_label(self):
+        if not self.displayImage:
+            messagebox.showwarning('Warning', "None image selected!")
+            return
+        if self.drawMethod == 'kp' and self.KPcoordList:
+            self.KPcoordList.pop(-1)
+        elif self.drawMethod == 'bb' and self.BBcoordList:
+            self.BBcoordList.pop(-1)
+        else:
+            messagebox.showinfo('Info', "Empty list! \n Nothing to delete")
+            return
+
+        self.coorDisplaybar.config(state='normal')
+        self.coorDisplaybar.delete('1.0', tk.END)
+        element = self.format_coordlistbar_output(True)
+        self.coorDisplaybar.insert(tk.END, element)
+        self.coorDisplaybar.config(state='disabled')
+        dtl = self.drawTraceList.pop(-1)
+        if dtl != 'IEL':
+            self.imageCanvas.delete(dtl)
 
     def show_next_img(self):
         if not self.trvSelectIid:
@@ -461,6 +496,10 @@ class GUI:
             title='Result',
             message=f'You selected {lcg}!'
         )
+        if lcg.lower() == 'keypoint':
+            print('kp')
+        elif lcg.lower() == 'bounding box':
+            print('bb')
 
     def change_label_size(self):
         tmp = self.SRSiv.get()
@@ -482,13 +521,17 @@ class GUI:
             self.save_result_show_next()
 
         elif key == 'NI':
-            pass
+            self.nextImageBTN.config(relief=tk.SUNKEN)
+            self.nextImageBTN.after(200, lambda: self.nextImageBTN.config(relief=tk.RAISED))
+            self.show_next_img()
         elif key == 'PI':
-            pass
+            self.previousImageBTN.config(relief=tk.SUNKEN)
+            self.previousImageBTN.after(200, lambda: self.previousImageBTN.config(relief=tk.RAISED))
+            self.show_previous_img()
         elif key == 'IEL':
             self.insert_empty_label()
         elif key == 'DL':
-            pass
+            self.delete_previous_label()
 
     def clear_display(self):
         self.imageCanvas.delete('all')
