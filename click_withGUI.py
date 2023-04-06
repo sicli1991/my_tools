@@ -9,7 +9,7 @@ import yaml
 Global_color_list = ["red", "orange", "yellow", "green", "blue", "cyan", "purple",
                      "hot pink", "dark orange", "gold", "spring green", "navy",
                      "cadet blue", "magenta"]
-method = ['kp', 'bb']
+# method = ['kp', 'bb']
 settingWindowCounter = 1
 
 # load config file
@@ -44,16 +44,18 @@ class GUI:
         self.displayImage = None
         self.originalImageSize = None
         self.resizedImageSize = (300, 300)
-        self.resizeImgFlag = False
+        self.resizeImgFlag = config['resize_img']
         self.canvasImgZoomX = None
         self.canvasImgZoomY = None
 
+        self.drawMethod_value_list = ['Keypoint', 'Bounding Box']
         self.drawPointSize = config['draw_label_size']['default']
         self.drawBBsize = config['draw_label_size']['default']
-        self.drawMethod = 'bb'
+        self.drawMethod = self.drawMethod_value_list[config['default_draw_method']]
         self.drawBBcoordList = []  # list of coordinates for drawing bounding box (coordinates based on event.xy)
         self.drawTraceList = []  # used to trace canvas draw items for delete or ...
 
+        self.ok_to_change_draw_method = True
         self.currentWorkingPath = None
         self.KPcoordList = []
         self.BBcoordList = []  # list of coordinates to display and save for BB (coordinates based on resized x y)
@@ -92,6 +94,7 @@ class GUI:
         self.labelSettingFrame.grid_propagate(False)
         self.selectedLabel = tk.StringVar()
         self.labelComboBox = ttk.Combobox(self.labelSettingFrame, textvariable=self.selectedLabel)
+        self.labelComboBoxMap = {}
 
         self.sizeRadioFrame = tk.Frame(self.labelSettingFrame)
         self.sizeRadioLabel = tk.Label(self.sizeRadioFrame, text="Size:", font=10)
@@ -180,17 +183,17 @@ class GUI:
         self.trvFrame.grid(row=1, column=3, sticky='ne')
         self.cDsb.pack(side='right', fill=tk.Y)
         self.trv.pack()
-        self.trv.config(yscrollcommand=self.cDsb.set)
+        self.trv.config(yscrollcommand=self.cDsb.set, selectmode='browse')
         self.cDsb.config(command=self.trv.yview)
 
         # label setting area (interface)
         self.labelSettingFrame.grid(row=2, column=3, sticky='ne', padx=(0, 10))
-        self.labelComboBox['values'] = ['Keypoint', 'Bounding Box']
+        self.labelComboBox['values'] = self.drawMethod_value_list
         self.labelComboBox['state'] = 'readonly'
         self.labelComboBox.grid(row=1, sticky='we', padx=(15, 5))
         self.labelComboBox.bind('<<ComboboxSelected>>', self.label_method_changed)
+        self.labelComboBox.current(config['default_draw_method'])
 
-        # self.sizeRadioFrame.pack(side='bottom')
         self.sizeRadioFrame.grid(row=3)
         self.sizeRadioLabel.pack(side='left', fill=tk.Y)
 
@@ -225,6 +228,8 @@ class GUI:
     def list_file_in_folder(self):
         # messagebox.showinfo("window1", "bing!")
         folder_selected = filedialog.askdirectory()
+        if not folder_selected:
+            return
         self.currentWorkingPath = folder_selected
         self.folderName.config(text=folder_selected, anchor='w')
         create_widget_tip(self.folderName)
@@ -273,11 +278,13 @@ class GUI:
         print(self.canvasImgZoomX, self.canvasImgZoomY)
         img_canv = self.imageCanvas.create_image(self.canvasImgZoomX, self.canvasImgZoomY,
                                                  anchor='nw', image=self.displayImage)
-        if self.drawMethod == 'kp':
-            self.imageCanvas.tag_bind(img_canv, '<Button-1>', self.get_press_coordinate)
-        elif self.drawMethod == 'bb':
-            self.imageCanvas.tag_bind(img_canv, '<Button-1>', self.get_press_coordinate)
-            self.imageCanvas.tag_bind(img_canv, '<ButtonRelease-1>', self.get_release_coordinate)
+        # if self.drawMethod.lower() == 'keypoint':
+        #     self.imageCanvas.tag_bind(img_canv, '<Button-1>', self.get_press_coordinate)
+        # elif self.drawMethod.lower() == 'bounding box':
+        #     self.imageCanvas.tag_bind(img_canv, '<Button-1>', self.get_press_coordinate)
+        #     self.imageCanvas.tag_bind(img_canv, '<ButtonRelease-1>', self.get_release_coordinate)
+        self.imageCanvas.tag_bind(img_canv, '<Button-1>', self.get_press_coordinate)
+        self.imageCanvas.tag_bind(img_canv, '<ButtonRelease-1>', self.get_release_coordinate)
 
     def de_resize_coordinates(self, cur_x, cur_y):
         beilv_x = self.resizedImageSize[0] / self.originalImageSize[0]
@@ -301,11 +308,9 @@ class GUI:
         self.drawTraceList.append(my_draw)
 
     def get_press_coordinate(self, event):
+        self.ok_to_change_draw_method = False
         ex = event.x
         ey = event.y
-
-        if self.drawMethod == 'kp':
-            self.draw_point(ex, ey, len(self.KPcoordList))
 
         if self.resizeImgFlag:
             cand_x, cand_y = threshold_value(ex - self.canvasImgZoomX, ey - self.canvasImgZoomY,
@@ -315,20 +320,24 @@ class GUI:
             final_x, final_y = threshold_value(ex - self.canvasImgZoomX, ey - self.canvasImgZoomY,
                                                self.originalImageSize[0], self.originalImageSize[1])
 
-        if self.drawBBcoordList:
-            print("drawBoundingBox heads out of list, Error!!!!")
-        else:
-            self.drawBBcoordList.append([ex, ey])
-        if self.drawMethod == 'kp':
-            self.KPcoordList.append((final_x, final_x))
+        if self.drawMethod.lower() == 'keypoint':
+            self.KPcoordList.append((final_x, final_y))
             element = self.format_coordlistbar_output()
             self.coorDisplaybar.config(state='normal')
             self.coorDisplaybar.insert(tk.END, element)
             self.coorDisplaybar.config(state='disabled')
-        elif self.drawMethod == 'bb':
+            self.draw_point(ex, ey, len(self.KPcoordList))
+
+        elif self.drawMethod.lower() == 'bounding box':
+            # if self.drawBBcoordList:
+            #     print("drawBoundingBox heads out of list, Error!!!!")
+            # else:
+            #     self.drawBBcoordList.append([ex, ey])
+            self.drawBBcoordList.append([ex, ey])
             self.BBcoordList.append([[final_x, final_y]])
 
     def get_release_coordinate(self, event):
+        self.ok_to_change_draw_method = False
         bb_x, bb_y = event.x, event.y
 
         if self.resizeImgFlag:  # check image resize status
@@ -339,13 +348,14 @@ class GUI:
             final_x, final_y = threshold_value(bb_x - self.canvasImgZoomX, bb_y - self.canvasImgZoomY,
                                                self.originalImageSize[0], self.originalImageSize[1])
 
-        if len(self.drawBBcoordList) == 1:
-            self.drawBBcoordList.append([bb_x, bb_y])
-        else:
-            print("BoundingBox tails out of list, Error!!!!")
-        if self.drawMethod == 'bb':
+        if self.drawMethod.lower() == 'bounding box':
+            if len(self.drawBBcoordList) == 1:
+                self.drawBBcoordList.append([bb_x, bb_y])
+            else:
+                print("BoundingBox tails out of list, Error!!!!")
+
             self.draw_bb(self.drawBBcoordList, len(self.BBcoordList))
-            self.drawBBcoordList = []
+            self.drawBBcoordList.clear()
             self.BBcoordList[-1].append([final_x, final_y])
             element = self.format_coordlistbar_output()
             self.coorDisplaybar.config(state='normal')
@@ -356,14 +366,14 @@ class GUI:
         element = None
         if overwrite:
             result = ''
-            if self.drawMethod == 'bb':
+            if self.drawMethod.lower() == 'bounding box':
                 bbl = self.BBcoordList
                 for tmp in bbl:
                     head_x, head_y, tail_x, tail_y = tmp[0][0], tmp[0][1], tmp[1][0], tmp[1][1]
                     element = '[' + '(' + str(head_x) + ',' + str(head_y) + '),' + \
                               '(' + str(tail_x) + ',' + str(tail_y) + ')' + '] '
                     result += element
-            elif self.drawMethod == 'kp':
+            elif self.drawMethod.lower() == 'keypoint':
                 kpl = self.KPcoordList
                 for tmp in kpl:
                     cx, cy = tmp[0], tmp[1]
@@ -372,12 +382,12 @@ class GUI:
             return result
 
         else:
-            if self.drawMethod == 'bb':
+            if self.drawMethod.lower() == 'bounding box':
                 tmp = self.BBcoordList[-1]
                 head_x, head_y, tail_x, tail_y = tmp[0][0], tmp[0][1], tmp[1][0], tmp[1][1]
                 element = '[' + '(' + str(head_x) + ',' + str(head_y) + '),' + \
                           '(' + str(tail_x) + ',' + str(tail_y) + ')' + '] '
-            elif self.drawMethod == 'kp':
+            elif self.drawMethod.lower() == 'keypoint':
                 tmp = self.KPcoordList[-1]
                 cx, cy = tmp[0], tmp[1]
                 element = '[' + str(cx) + ',' + str(cy) + ']'
@@ -408,9 +418,9 @@ class GUI:
             messagebox.showwarning(title='WARNING', message='None select files !')
             return
         result = []
-        if self.drawMethod == 'kp':
+        if self.drawMethod.lower() == 'keypoint':
             result = self.KPcoordList
-        elif self.drawMethod == 'bb':
+        elif self.drawMethod.lower() == 'bounding box':
             result = self.BBcoordList
 
         if not result:
@@ -429,13 +439,14 @@ class GUI:
         self.show_next_img()
 
     def insert_empty_label(self):
+        self.ok_to_change_draw_method = False
         if not self.displayImage:
             messagebox.showwarning("None image selected!")
             return
 
-        if self.drawMethod == 'kp':
+        if self.drawMethod.lower() == 'keypoint':
             self.KPcoordList.append(config['default_empty_label'])
-        elif self.drawMethod == 'bb':
+        elif self.drawMethod.lower() == 'bounding box':
             self.BBcoordList.append([config['default_empty_label'], config['default_empty_label']])
 
         element = self.format_coordlistbar_output()
@@ -448,17 +459,20 @@ class GUI:
         if not self.displayImage:
             messagebox.showwarning('Warning', "None image selected!")
             return
-        if self.drawMethod == 'kp' and self.KPcoordList:
+        if self.drawMethod.lower() == 'keypoint' and self.KPcoordList:
             self.KPcoordList.pop(-1)
-        elif self.drawMethod == 'bb' and self.BBcoordList:
+        elif self.drawMethod.lower() == 'bounding box' and self.BBcoordList:
             self.BBcoordList.pop(-1)
         else:
             messagebox.showinfo('Info', "Empty list! \n Nothing to delete")
             return
 
+        # delete all display and rewrite
         self.coorDisplaybar.config(state='normal')
         self.coorDisplaybar.delete('1.0', tk.END)
         element = self.format_coordlistbar_output(True)
+        if not element:
+            self.ok_to_change_draw_method = True
         self.coorDisplaybar.insert(tk.END, element)
         self.coorDisplaybar.config(state='disabled')
         dtl = self.drawTraceList.pop(-1)
@@ -474,6 +488,7 @@ class GUI:
         self.saveFileNumberCounter = 0
         self.trvSelectIid += 1
         self.trv.selection_set(self.trvSelectIid)
+        self.trv.see(self.trvSelectIid)
         self.trvSelectFile = self.trv.item(self.trvSelectIid, "text")
         select_file_path = os.path.join(self.currentWorkingPath, self.trvSelectFile)
         self.display_image(select_file_path)
@@ -486,20 +501,29 @@ class GUI:
             return
         self.trvSelectIid -= 1
         self.trv.selection_set(self.trvSelectIid)
+        self.trv.see(self.trvSelectIid)
         self.trvSelectFile = self.trv.item(self.trvSelectIid, "text")
         select_file_path = os.path.join(self.currentWorkingPath, self.trvSelectFile)
         self.display_image(select_file_path)
 
     def label_method_changed(self, others):
+        msgbox = None
         lcg = self.labelComboBox.get()
-        messagebox.showinfo(
-            title='Result',
-            message=f'You selected {lcg}!'
-        )
-        if lcg.lower() == 'keypoint':
-            print('kp')
-        elif lcg.lower() == 'bounding box':
-            print('bb')
+        # print(lcg, self.drawMethod)
+        if lcg == self.drawMethod:
+            return
+        else:
+            if not self.ok_to_change_draw_method:
+                msgbox = messagebox.askyesno("Warning", "Change Label type will empty candidate list, are you sure")
+            else:
+                self.drawMethod = lcg
+                return
+
+        if msgbox:
+            self.drawMethod = lcg
+            self.clear_display(clear_img=False)
+        else:
+            self.labelComboBox.current(self.drawMethod_value_list.index(self.drawMethod))
 
     def change_label_size(self):
         tmp = self.SRSiv.get()
@@ -533,8 +557,14 @@ class GUI:
         elif key == 'DL':
             self.delete_previous_label()
 
-    def clear_display(self):
-        self.imageCanvas.delete('all')
+    def clear_display(self, clear_img=True, clear_draw=True):
+        self.ok_to_change_draw_method = True
+        if clear_img:
+            self.imageCanvas.delete('all')
+        else:
+            if clear_draw:
+                while self.drawTraceList:
+                    self.imageCanvas.delete(self.drawTraceList.pop(-1))
 
         self.coorDisplaybar.configure(state='normal')
         self.coorDisplaybar.delete('1.0', tk.END)
@@ -544,6 +574,8 @@ class GUI:
         self.BBcoordList = []
         self.drawTraceList = []
 
+    def tree_view_scroll_to(self, selected_id):
+        pass
 
 class OutputSettingWindow:
     def __init__(self, parent, root_output_structure, root_output_path_label):

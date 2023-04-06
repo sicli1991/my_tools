@@ -17,3 +17,8 @@ event_key_list:
 default_empty_label:
     - 9999  # x
     - 9999  # y
+
+#  0: keypoint  1: boundingbox
+default_draw_method: 1
+
+resize_img: False
