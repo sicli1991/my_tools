@@ -76,6 +76,8 @@ class GUI:
         self.previousImageBTN = None
         self.saveAndNextBTN = None
         self.coorDisplaybar = tk.Text(self.root, padx=20, pady=10, height=1, width=170, bg="light cyan")
+        self.draw_start_x, self.draw_start_y = None, None
+        self.draw_preview = None
 
         # working dir area
         self.workingDirFrame = tk.Frame(self.root, bg='black', highlightbackground="green", highlightthickness=2)
@@ -283,7 +285,8 @@ class GUI:
         # elif self.drawMethod.lower() == 'bounding box':
         #     self.imageCanvas.tag_bind(img_canv, '<Button-1>', self.get_press_coordinate)
         #     self.imageCanvas.tag_bind(img_canv, '<ButtonRelease-1>', self.get_release_coordinate)
-        self.imageCanvas.tag_bind(img_canv, '<Button-1>', self.get_press_coordinate)
+        self.imageCanvas.tag_bind(img_canv, '<ButtonPress-1>', self.get_press_coordinate)
+        self.imageCanvas.tag_bind(img_canv, '<B1-Motion>', self.get_move_coordinate)
         self.imageCanvas.tag_bind(img_canv, '<ButtonRelease-1>', self.get_release_coordinate)
 
     def de_resize_coordinates(self, cur_x, cur_y):
@@ -333,6 +336,8 @@ class GUI:
             #     print("drawBoundingBox heads out of list, Error!!!!")
             # else:
             #     self.drawBBcoordList.append([ex, ey])
+            self.draw_start_x = ex
+            self.draw_start_y = ey
             self.drawBBcoordList.append([ex, ey])
             self.BBcoordList.append([[final_x, final_y]])
 
@@ -353,7 +358,8 @@ class GUI:
                 self.drawBBcoordList.append([bb_x, bb_y])
             else:
                 print("BoundingBox tails out of list, Error!!!!")
-
+            if self.draw_preview:
+                self.imageCanvas.delete(self.draw_preview)
             self.draw_bb(self.drawBBcoordList, len(self.BBcoordList))
             self.drawBBcoordList.clear()
             self.BBcoordList[-1].append([final_x, final_y])
@@ -361,6 +367,15 @@ class GUI:
             self.coorDisplaybar.config(state='normal')
             self.coorDisplaybar.insert(tk.END, element)
             self.coorDisplaybar.config(state='disabled')
+
+    def get_move_coordinate(self, event):
+        if self.draw_preview:
+            self.imageCanvas.delete(self.draw_preview)
+        objectId = self.imageCanvas.create_rectangle(self.draw_start_x, self.draw_start_y, event.x, event.y,
+                                                     outline=Global_color_list[len(self.BBcoordList)-1],
+                                                     width=self.drawBBsize)
+        # print(objectId)
+        self.draw_preview = objectId
 
     def format_coordlistbar_output(self, overwrite=False):
         element = None
@@ -569,13 +584,14 @@ class GUI:
         self.coorDisplaybar.configure(state='normal')
         self.coorDisplaybar.delete('1.0', tk.END)
         self.coorDisplaybar.configure(state='disabled')
-
+        self.draw_start_x, self.draw_start_y = None, None
         self.KPcoordList = []
         self.BBcoordList = []
         self.drawTraceList = []
 
     def tree_view_scroll_to(self, selected_id):
         pass
+
 
 class OutputSettingWindow:
     def __init__(self, parent, root_output_structure, root_output_path_label):
